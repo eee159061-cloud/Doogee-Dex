@@ -9,36 +9,33 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-    - name: Generate Project & Build APK
+    - uses: android-actions/setup-android@v3
+    - name: Create Project Files
       run: |
-        mkdir -p app/src/main/java/com/doogee/desktop app/src/main/res/layout
-        cat << 'EOF' > settings.gradle
-        rootProject.name = "DoogeeDeX"
-        include ':app'
-        EOF
-        cat << 'EOF' > build.gradle
-        buildscript {
+        python3 -c '
+        import os
+        os.makedirs("app/src/main/java/com/doogee/desktop", exist_ok=True)
+        os.makedirs("app/src/main/res/layout", exist_ok=True)
+
+        open("settings.gradle", "w").write("rootProject.name = \"DoogeeDeX\"\ninclude \":app\"\n")
+        open("gradle.properties", "w").write("android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2048m\n")
+
+        open("build.gradle", "w").write("""buildscript {
             repositories { google(); mavenCentral() }
             dependencies {
-                classpath 'com.android.tools.build:gradle:8.2.2'
-                classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+                classpath "com.android.tools.build:gradle:8.2.2"
+                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
             }
         }
         allprojects { repositories { google(); mavenCentral() } }
-        EOF
-        cat << 'EOF' > gradle.properties
-        android.useAndroidX=true
-        org.gradle.jvmargs=-Xmx2048m
-        EOF
-        cat << 'EOF' > app/build.gradle
-        plugins {
-            id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
+        """)
+
+        open("app/build.gradle", "w").write("""plugins {
+            id "com.android.application"
+            id "org.jetbrains.kotlin.android"
         }
         android {
-            namespace 'com.doogee.desktop'
+            namespace "com.doogee.desktop"
             compileSdk 34
             defaultConfig {
                 applicationId "com.doogee.desktop"
@@ -51,14 +48,14 @@ jobs:
                 sourceCompatibility JavaVersion.VERSION_17
                 targetCompatibility JavaVersion.VERSION_17
             }
-            kotlinOptions { jvmTarget = '17' }
+            kotlinOptions { jvmTarget = "17" }
         }
         dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation "androidx.appcompat:appcompat:1.6.1"
         }
-        EOF
-        cat << 'EOF' > app/src/main/AndroidManifest.xml
-        <?xml version="1.0" encoding="utf-8"?>
+        """)
+
+        open("app/src/main/AndroidManifest.xml", "w").write("""<?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://android.com">
             <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
             <application android:label="Doogee DeX" android:theme="@style/Theme.AppCompat.NoActionBar">
@@ -70,9 +67,9 @@ jobs:
                 </activity>
             </application>
         </manifest>
-        EOF
-        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-        <?xml version="1.0" encoding="utf-8"?>
+        """)
+
+        open("app/src/main/res/layout/activity_main.xml", "w").write("""<?xml version="1.0" encoding="utf-8"?>
         <RelativeLayout xmlns:android="http://android.com"
             android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121820">
             <GridView android:id="@+id/appsGrid" android:layout_width="match_parent" android:layout_height="match_parent"
@@ -89,9 +86,9 @@ jobs:
                     android:format12Hour="hh:mm a" android:textColor="#E0E6ED" android:textSize="15sp" />
             </LinearLayout>
         </RelativeLayout>
-        EOF
-        cat << 'EOF' > app/src/main/java/com/doogee/desktop/MainActivity.kt
-        package com.doogee.desktop
+        """)
+
+        open("app/src/main/java/com/doogee/desktop/MainActivity.kt", "w").write("""package com.doogee.desktop
         import android.app.ActivityOptions
         import android.content.Intent
         import android.os.Build
@@ -137,8 +134,10 @@ jobs:
                 }
             }
         }
-        EOF
-        gradle assembleDebug
+        """)
+        '
+    - name: Build APK
+      run: gradle assembleDebug
     - uses: actions/upload-artifact@v4
       with:
         name: Doogee-DeX-APK
