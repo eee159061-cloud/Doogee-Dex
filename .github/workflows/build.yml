@@ -1,0 +1,141 @@
+name: Build Doogee DeX APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-java@v4
+      with: { java-version: '17', distribution: 'temurin' }
+    - uses: gradle/actions/setup-gradle@v3
+      with: { gradle-version: '8.5' }
+    - name: Generate Project & Build
+      run: |
+        mkdir -p app/src/main/java/com/doogee/desktop app/src/main/res/layout
+        cat << 'EOF' > settings.gradle
+        rootProject.name = "DoogeeDeX"
+        include ':app'
+        EOF
+        cat << 'EOF' > build.gradle
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:8.2.2'
+                classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+            }
+        }
+        allprojects { repositories { google(); mavenCentral() } }
+        EOF
+        cat << 'EOF' > gradle.properties
+        android.useAndroidX=true
+        org.gradle.jvmargs=-Xmx2048m
+        EOF
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
+        }
+        android {
+            namespace 'com.doogee.desktop'
+            compileSdk 34
+            defaultConfig {
+                applicationId "com.doogee.desktop"
+                minSdk 26
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+            kotlinOptions { jvmTarget = '17' }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
+        cat << 'EOF' > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://android.com">
+            <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+            <application android:label="Doogee DeX" android:theme="@style/Theme.AppCompat.NoActionBar">
+                <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true" android:screenOrientation="landscape">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <RelativeLayout xmlns:android="http://android.com"
+            android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121820">
+            <GridView android:id="@+id/appsGrid" android:layout_width="match_parent" android:layout_height="match_parent"
+                android:layout_above="@+id/taskbar" android:numColumns="6" android:verticalSpacing="16dp"
+                android:horizontalSpacing="16dp" android:padding="20dp" android:gravity="center" />
+            <LinearLayout android:id="@+id/taskbar" android:layout_width="match_parent" android:layout_height="48dp"
+                android:layout_alignParentBottom="true" android:background="#1E2733" android:orientation="horizontal"
+                android:gravity="center_vertical" android:paddingStart="16dp" android:paddingEnd="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="⊞ Doogee DeX" android:textColor="#FFFFFF" android:textSize="16sp"
+                    android:textStyle="bold" android:padding="8dp" android:background="#2B394A" />
+                <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                <TextClock android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:format12Hour="hh:mm a" android:textColor="#E0E6ED" android:textSize="15sp" />
+            </LinearLayout>
+        </RelativeLayout>
+        EOF
+        cat << 'EOF' > app/src/main/java/com/doogee/desktop/MainActivity.kt
+        package com.doogee.desktop
+        import android.app.ActivityOptions
+        import android.content.Intent
+        import android.os.Build
+        import android.os.Bundle
+        import android.view.*
+        import android.widget.*
+        import androidx.appcompat.app.AppCompatActivity
+
+        class MainActivity : AppCompatActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_main)
+                val appsGrid = findViewById<GridView>(R.id.appsGrid)
+                val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+                val appsList = packageManager.queryIntentActivities(mainIntent, 0)
+                    .filter { it.activityInfo.packageName != packageName }
+                    .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+                appsGrid.adapter = object : BaseAdapter() {
+                    override fun getCount() = appsList.size
+                    override fun getItem(p: Int) = appsList[p]
+                    override fun getItemId(p: Int) = p.toLong()
+                    override fun getView(p: Int, v: View?, parent: ViewGroup?): View {
+                        val layout = LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(8, 8, 8, 8)
+                        }
+                        val icon = ImageView(this@MainActivity).apply {
+                            layoutParams = LinearLayout.LayoutParams(100, 100); setImageDrawable(appsList[p].loadIcon(packageManager))
+                        }
+                        val label = TextView(this@MainActivity).apply {
+                            text = appsList[p].loadLabel(packageManager); setTextColor(0xFFFFFFFF.toInt())
+                            textSize = 13f; gravity = Gravity.CENTER; maxLines = 1; setPadding(0, 6, 0, 0)
+                        }
+                        layout.addView(icon); layout.addView(label); return layout
+                    }
+                }
+                appsGrid.setOnItemClickListener { _, _, p, _ ->
+                    val intent = packageManager.getLaunchIntentForPackage(appsList[p].activityInfo.packageName) ?: return@setOnItemClickListener
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val opts = ActivityOptions.makeBasic().apply { launchDisplayId = display?.displayId ?: 0 }
+                        startActivity(intent, opts.toBundle())
+                    } else startActivity(intent)
+                }
+            }
+        }
+        EOF
+        gradle assembleDebug
+    - uses: actions/upload-artifact@v4
+      with: { name: Doogee-DeX-APK, path: app/build/outputs/apk/debug/app-debug.apk }
