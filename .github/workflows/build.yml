@@ -6,10 +6,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-java@v4
-      with: { java-version: '17', distribution: 'temurin' }
-    - uses: gradle/actions/setup-gradle@v3
-      with: { gradle-version: '8.5' }
-    - name: Generate Project & Build
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    - name: Generate Project & Build APK
       run: |
         mkdir -p app/src/main/java/com/doogee/desktop app/src/main/res/layout
         cat << 'EOF' > settings.gradle
@@ -138,4 +140,6 @@ jobs:
         EOF
         gradle assembleDebug
     - uses: actions/upload-artifact@v4
-      with: { name: Doogee-DeX-APK, path: app/build/outputs/apk/debug/app-debug.apk }
+      with:
+        name: Doogee-DeX-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
